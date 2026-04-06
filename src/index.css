@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --accent: #7c3aed; }
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(180deg,#faf5ff 0%,#f3f4ff 100%);
+}
+.container { max-width:1100px; margin:0 auto; padding:0 1rem; }
