@@ -1,36 +1,28 @@
-import React, { useState } from 'react';
-import api from '../../api';      // if page is nested two levels deep
-import { getUser } from '../../auth';
-
+import React, { useState, useEffect } from 'react';
+import api from '../../api';
 import { setAuth } from '../../auth';
 import { useNavigate } from 'react-router-dom';
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'user' });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       const endpoint = isLogin ? '/auth/sign-in' : '/auth/sign-up';
       const { data } = await api.post(endpoint, formData);
-
-      // Expecting backend returns { token, user }
       const token = data.token;
       const user = data.user;
-
       if (!token || !user) throw new Error('Invalid auth response');
-
       setAuth(token, user);
-      // set axios header
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Authentication failed');
@@ -39,95 +31,212 @@ const Auth = () => {
     }
   };
 
+  const switchMode = () => {
+    setIsLogin(!isLogin);
+    setError('');
+    setFormData({ name: '', email: '', password: '' });
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 flex items-center justify-center py-12 px-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-800">{isLogin ? 'Welcome Back' : 'Create Account'}</h2>
-          <p className="text-gray-600 mt-2">{isLogin ? 'Sign in to continue' : 'Join CampusConnect today'}</p>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@800;900&family=Inter:wght@400;500;600;700&display=swap');
+
+        @keyframes blob-float {
+          0%,100% { transform: translate(0,0) scale(1); }
+          33% { transform: translate(30px,-20px) scale(1.05); }
+          66% { transform: translate(-20px,20px) scale(0.97); }
+        }
+        .blob { animation: blob-float 10s ease-in-out infinite; }
+        .blob-delay { animation-delay: 4s; }
+
+        @keyframes slide-up {
+          from { opacity:0; transform:translateY(24px); }
+          to   { opacity:1; transform:translateY(0); }
+        }
+        .slide-up { animation: slide-up 0.5s cubic-bezier(0.16,1,0.3,1) both; }
+
+        @keyframes card-appear {
+          from { opacity:0; transform:scale(0.97) translateY(12px); }
+          to   { opacity:1; transform:scale(1) translateY(0); }
+        }
+        .card-appear { animation: card-appear 0.45s cubic-bezier(0.16,1,0.3,1) both; }
+
+        .glass-field {
+          background: rgba(255,255,255,0.06);
+          border: 1.5px solid rgba(255,255,255,0.15);
+          color: #fff;
+          transition: border-color 0.2s, background 0.2s;
+        }
+        .glass-field:focus {
+          background: rgba(255,255,255,0.10);
+          border-color: rgba(167,139,250,0.8);
+          outline: none;
+        }
+        .glass-field::placeholder { color: rgba(255,255,255,0.35); }
+        .glass-field:-webkit-autofill,
+        .glass-field:-webkit-autofill:focus {
+          -webkit-box-shadow: 0 0 0 100px #3b0764 inset;
+          -webkit-text-fill-color: #fff;
+        }
+      `}</style>
+
+      <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-gradient-to-br from-slate-900 via-purple-950 to-indigo-950 px-4 py-16" style={{ fontFamily: 'Inter,sans-serif' }}>
+
+        {/* Animated blobs */}
+        <div className="blob absolute w-[420px] h-[420px] rounded-full bg-purple-600 opacity-20 blur-3xl -top-20 -left-20 pointer-events-none" />
+        <div className="blob blob-delay absolute w-[360px] h-[360px] rounded-full bg-indigo-500 opacity-20 blur-3xl bottom-0 right-0 pointer-events-none" />
+        <div className="blob absolute w-[280px] h-[280px] rounded-full bg-pink-600 opacity-10 blur-3xl top-1/2 left-1/2 -translate-x-1/2 pointer-events-none" style={{ animationDelay: '2s' }} />
+
+        {/* Stars */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {[...Array(18)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 rounded-full bg-white"
+              style={{
+                top: `${Math.random() * 100}%`,
+                left: `${Math.random() * 100}%`,
+                opacity: Math.random() * 0.5 + 0.1,
+                animationDelay: `${Math.random() * 3}s`,
+              }}
+            />
+          ))}
         </div>
 
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4">
-            {error}
-          </div>
-        )}
+        <div className="relative w-full max-w-md card-appear">
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {!isLogin && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent"
-                placeholder="Enter your name"
-              />
+          {/* Logo */}
+          <div className="text-center mb-8 slide-up">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 shadow-2xl mb-4 text-3xl">
+              🎓
             </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-            <input
-              type="email"
-              required
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent"
-              placeholder="Enter your email"
-            />
+            <h1 className="text-4xl font-black text-white" style={{ fontFamily: 'Outfit,sans-serif' }}>
+              CampusConnect
+            </h1>
+            <p className="text-purple-300 mt-1 text-sm font-medium">Your Campus. Your Events. Your Story.</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-            <input
-              type="password"
-              required
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent"
-              placeholder="Enter your password"
-            />
-          </div>
+          {/* Card */}
+          <div className="rounded-3xl overflow-hidden shadow-2xl" style={{ background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.12)' }}>
 
-          {!isLogin && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent"
-              >
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
+            {/* Tab switcher */}
+            <div className="flex border-b border-white/10">
+              {['Sign In', 'Sign Up'].map((label, idx) => {
+                const active = (idx === 0) === isLogin;
+                return (
+                  <button
+                    key={label}
+                    onClick={() => { setIsLogin(idx === 0); setError(''); setFormData({ name: '', email: '', password: '' }); }}
+                    className={`flex-1 py-4 text-sm font-bold transition-all duration-200 ${active ? 'text-white border-b-2 border-purple-400' : 'text-white/40 hover:text-white/70'}`}
+                    style={{ background: active ? 'rgba(124,58,237,0.15)' : 'transparent' }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-semibold transition disabled:opacity-50"
-          >
-            {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')}
-          </button>
-        </form>
+            <div className="p-8">
+              {/* Welcome text */}
+              <div className="mb-7">
+                <h2 className="text-2xl font-black text-white" style={{ fontFamily: 'Outfit,sans-serif' }}>
+                  {isLogin ? 'Welcome back 👋' : 'Create your account'}
+                </h2>
+                <p className="text-white/50 text-sm mt-1">
+                  {isLogin ? 'Sign in to access your dashboard and tickets.' : 'Join thousands of students on CampusConnect.'}
+                </p>
+              </div>
 
-        <div className="mt-6 text-center">
-          <button
-            onClick={() => {
-              setIsLogin(!isLogin);
-              setError('');
-            }}
-            className="text-purple-600 hover:text-purple-700 font-medium"
-          >
-            {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
-          </button>
+              {/* Error */}
+              {error && (
+                <div className="mb-5 px-4 py-3 rounded-xl text-sm font-semibold text-red-300 border border-red-400/30" style={{ background: 'rgba(239,68,68,0.1)' }}>
+                  ❌ {error}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {!isLogin && (
+                  <div>
+                    <label className="block text-xs font-bold text-purple-300 uppercase tracking-wider mb-2">Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className="glass-field w-full px-4 py-3.5 rounded-xl text-sm"
+                      placeholder="Enter your full name"
+                      autoComplete="name"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-purple-300 uppercase tracking-wider mb-2">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="glass-field w-full px-4 py-3.5 rounded-xl text-sm"
+                    placeholder="you@college.edu"
+                    autoComplete="email"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-purple-300 uppercase tracking-wider mb-2">Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPass ? 'text' : 'password'}
+                      required
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      className="glass-field w-full px-4 py-3.5 rounded-xl text-sm pr-12"
+                      placeholder="Enter password"
+                      autoComplete={isLogin ? 'current-password' : 'new-password'}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass(s => !s)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80 transition text-sm"
+                    >
+                      {showPass ? '🙈' : '👁️'}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-4 rounded-xl font-black text-base transition-all duration-300 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: loading ? 'rgba(124,58,237,0.4)' : 'linear-gradient(135deg,#7c3aed,#4f46e5)', boxShadow: loading ? 'none' : '0 8px 24px rgba(124,58,237,0.5)', color: '#fff' }}
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="animate-spin">⏳</span> {isLogin ? 'Signing in...' : 'Creating account...'}
+                    </span>
+                  ) : (
+                    isLogin ? '🚀 Sign In' : '✨ Create Account'
+                  )}
+                </button>
+              </form>
+
+              <p className="text-center text-white/40 text-xs mt-6">
+                {isLogin ? "Don't have an account? " : 'Already have an account? '}
+                <button onClick={switchMode} className="text-purple-400 hover:text-purple-300 font-semibold transition">
+                  {isLogin ? 'Sign Up' : 'Sign In'}
+                </button>
+              </p>
+            </div>
+          </div>
+
+          <p className="text-center text-white/20 text-xs mt-6">
+            🔒 Secure login · CampusConnect &copy; 2025
+          </p>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

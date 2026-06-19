@@ -5,10 +5,15 @@ export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000/
 const api = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
 });
 
-// set token from localStorage if available
-const token = localStorage.getItem('token');
-if (token) api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+// Always read the latest token from localStorage on every request
+// This fixes the bug where token was set only once at import time
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) config.headers['Authorization'] = `Bearer ${token}`;
+  return config;
+});
 
 export default api;

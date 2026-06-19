@@ -1,18 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaMapMarkerAlt, FaCalendarAlt, FaBookmark, FaArrowRight } from 'react-icons/fa';
+import { FaMapMarkerAlt, FaCalendarAlt, FaBookmark, FaArrowRight, FaTh, FaCalendar } from 'react-icons/fa';
 import api from '../../api';
+import EventCalendar from '../../components/EventCalendar';
+import { getUser } from '../../auth';
 
 export default function Home() {
   const [featuredEvent, setFeaturedEvent] = useState(null);
   const [events, setEvents] = useState([]);
+  const [soldOutMap, setSoldOutMap] = useState({});
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [hoveredCard, setHoveredCard] = useState(null);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'calendar'
+  const [savedEvents, setSavedEvents] = useState(new Set());
+  const [bookmarkLoading, setBookmarkLoading] = useState({});
   const navigate = useNavigate();
+  const user = getUser();
 
   useEffect(() => {
     fetchFeaturedEvent();
     fetchEvents();
+    if (user) fetchSavedEvents();
   }, []);
 
   useEffect(() => {
@@ -51,10 +59,42 @@ export default function Home() {
   const fetchEvents = async () => {
     try {
       const { data } = await api.get('/events');
-      setEvents(data || []);
+      const evList = data || [];
+      setEvents(evList);
+      // Fetch sold-out status for all events in parallel
+      const counts = await Promise.allSettled(
+        evList.map(ev => api.get(`/events/${ev._id}/registration-count`))
+      );
+      const map = {};
+      counts.forEach((res, i) => {
+        if (res.status === 'fulfilled') {
+          map[evList[i]._id] = res.value.data.isSoldOut;
+        }
+      });
+      setSoldOutMap(map);
     } catch (err) {
       console.error('Failed to fetch events:', err);
       setEvents([]);
+    }
+  };
+
+  const fetchSavedEvents = async () => {
+    try {
+      const { data } = await api.get('/users/saved');
+      setSavedEvents(new Set((data.savedEvents || []).map(e => (e._id || e).toString())));
+    } catch (_) {}
+  };
+
+  const handleBookmark = async (e, eventId) => {
+    e.stopPropagation();
+    if (!user) { navigate('/auth'); return; }
+    setBookmarkLoading(prev => ({ ...prev, [eventId]: true }));
+    try {
+      const { data } = await api.post(`/users/saved/${eventId}`);
+      setSavedEvents(new Set(data.savedEvents.map(id => id.toString())));
+    } catch (_) {}
+    finally {
+      setBookmarkLoading(prev => ({ ...prev, [eventId]: false }));
     }
   };
 
@@ -213,7 +253,7 @@ export default function Home() {
           <section className="relative z-10 animate-gradient bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 text-white py-24 overflow-hidden">
             <div className="absolute inset-0 opacity-10">
               <div className="absolute top-0 left-0 w-full h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMzLjMxNCAwIDYgMi42ODYgNiA2cy0yLjY4NiA2LTYgNi02LTIuNjg2LTYtNiAyLjY4Ni02IDYtNnoiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIyIi8+PC9nPjwvc3ZnPg==')]" />
-              <video src="public/utsavvid.mp4" className="absolute inset-0 w-full h-full object-cover -z-10" muted autoPlay loop playsInline></video>
+              <video src="/utsavvid.mp4" className="absolute inset-0 w-full h-full object-cover -z-10" muted autoPlay loop playsInline></video>
             </div>
 
             <div className="max-w-7xl mx-auto px-6 lg:px-8 relative z-10">
@@ -301,6 +341,7 @@ export default function Home() {
 
         {/* EVENTS GRID */}
         <main className="max-w-7xl mx-auto px-6 lg:px-8 py-20 relative z-10">
+          {/* Header + View Toggle */}
           <div className="flex items-center justify-between mb-12 animate-fade-up">
             <div>
               <h2 className="text-4xl sm:text-5xl font-black text-gray-900 mb-2 heading-font">
@@ -308,13 +349,43 @@ export default function Home() {
               </h2>
               <p className="text-lg text-gray-600">Discover amazing experiences near you</p>
             </div>
-            <div className="hidden sm:block glass-card px-6 py-3 rounded-full">
-              <span className="text-sm font-semibold text-gray-700">
-                <span className="text-purple-600 text-2xl font-black">{events.length}</span> Events
-              </span>
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:block glass-card px-6 py-3 rounded-full">
+                <span className="text-sm font-semibold text-gray-700">
+                  <span className="text-purple-600 text-2xl font-black">{events.length}</span> Events
+                </span>
+              </div>
+              {/* View Toggle */}
+              <div className="flex bg-white rounded-2xl shadow-md p-1 gap-1 border border-purple-100">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200 ${
+                    viewMode === 'grid' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-500 hover:text-purple-600'
+                  }`}
+                >
+                  <FaTh className="text-xs" /> Grid
+                </button>
+                <button
+                  onClick={() => setViewMode('calendar')}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200 ${
+                    viewMode === 'calendar' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-500 hover:text-purple-600'
+                  }`}
+                >
+                  <FaCalendar className="text-xs" /> Calendar
+                </button>
+              </div>
             </div>
           </div>
 
+          {/* Calendar View */}
+          {viewMode === 'calendar' && (
+            <div className="mb-8">
+              <EventCalendar events={events} />
+            </div>
+          )}
+
+          {/* Grid View */}
+          {viewMode === 'grid' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {events.map((event, i) => (
               <article
@@ -345,7 +416,12 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Gradient Overlay */}
+                  {/* Sold Out Badge */}
+                  {soldOutMap[event._id] && (
+                    <div className="absolute top-4 right-4 bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1">
+                      🔴 Sold Out
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 </div>
 
@@ -373,19 +449,34 @@ export default function Home() {
 
                   <div className="flex gap-3">
                     <button 
-                      className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-3 rounded-xl font-bold transition-all duration-300 transform hover:scale-105 hover:shadow-lg"
+                      className={`flex-1 py-3 rounded-xl font-bold transition-all duration-300 transform hover:scale-105 hover:shadow-lg ${
+                        soldOutMap[event._id]
+                          ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white'
+                      }`}
+                      disabled={soldOutMap[event._id]}
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigate(`/event/${event._id}`);
+                        if (!soldOutMap[event._id]) navigate(`/event/${event._id}`);
                       }}
                     >
-                      Details
+                      {soldOutMap[event._id] ? 'Sold Out' : 'Details'}
                     </button>
                     <button 
-                      className="px-5 py-3 border-2 border-gray-200 hover:border-purple-600 hover:bg-purple-50 rounded-xl transition-all duration-300 group"
-                      onClick={(e) => e.stopPropagation()}
+                      className={`px-5 py-3 border-2 rounded-xl transition-all duration-300 group ${
+                        savedEvents.has(event._id)
+                          ? 'border-yellow-400 bg-yellow-50'
+                          : 'border-gray-200 hover:border-purple-600 hover:bg-purple-50'
+                      }`}
+                      onClick={(e) => handleBookmark(e, event._id)}
+                      title={savedEvents.has(event._id) ? 'Remove bookmark' : 'Save event'}
+                      disabled={bookmarkLoading[event._id]}
                     >
-                      <FaBookmark className="text-gray-400 group-hover:text-purple-600 transition-colors" />
+                      {bookmarkLoading[event._id] ? (
+                        <span className="text-gray-400 text-xs animate-spin inline-block">⏳</span>
+                      ) : (
+                        <FaBookmark className={savedEvents.has(event._id) ? 'text-yellow-500' : 'text-gray-400 group-hover:text-purple-600 transition-colors'} />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -400,6 +491,7 @@ export default function Home() {
               </div>
             )}
           </div>
+          )} {/* end grid view */}
         </main>
         
         <div className="h-24" />
